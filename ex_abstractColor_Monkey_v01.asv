@@ -338,9 +338,9 @@ end
 %otherwise, fixation achieved
 sendCode(codes.FIXATE);
 
-% if rand<e.fixJuice  %fixJuice
-%     giveJuice(1);
-% end
+if rand<e.fixJuice  %fixJuice
+    giveJuice(1);
+end
 
 % monkey has to wait and fix a time between 400-600 ms before objects start coming
 if ~waitForMS(e.preStimFix,e.fixX,e.fixY,params.fixWinRad)
