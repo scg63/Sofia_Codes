@@ -1,0 +1,560 @@
+function result = ex_abstractColor_Monkey_v01(e)
+% This is the final version for recording using abstractColor task. We start
+% this once the monkey has progressed various supersets using train 2_05.
+
+% The monkey is presented with two targets. The targets will always be on 
+% opposite sides of the probe, however their locations on either side can change,
+% i.e. the targets can be on opposite corners of the screen. 
+% Each target is filled with a fraction of red/green pixels. The FP then changes 
+% to a probe with a fraction of red/green pixels that's between the two sample 
+% target colors. Each trial will have a predetermined value for sample 1, 
+% sample 2 and the probe. These trial sets will be randomly selected from 
+% supersets. Each superset gives rise to a specific performance (i.e. superset 
+% A has 6 trial sets, and superset A gives rise to ~80% accuracy). First, a
+% superset will be randomly selected, then a trial set within the
+% determined superset will be selected.
+
+% Before the monkey makes an eye movement to the target, both targets turn 
+% to gray frames. The time between the targets' color change to gray frames
+% and the onset of the probe is controlled by 'grayDuration'. This is the 
+% time from probe onset - so negative values imply that the targets turned 
+% to gray frames before probe onset. 
+% NOTE: grayDuration should be set to <=100 ms. 
+
+% ver01: Written by SG 
+    % e.yDistance and xDistance can be modified in xml parameters. These 
+    % allow any locations on the x and y axis to be selected within yDistance
+    % and xDistance. If the radii of targ/distractor overlap with the probe 
+    % window radius, this code adjusts targ/distractor location so their 
+    % radii don't overlap. If locations of targ/distractor must be four 
+    % corners only (same four corners), comment out lines 75-174, and 
+    % uncomment lines below. 
+%% SET UP
+global params codes behav allCodes;
+
+e = e(1); %in case more than one 'trial' is passed at a time...
+%printDebugMessages = false;
+
+
+%initialize behavior-related stuff like trial count;
+if ~isfield(behav,'trialNum')
+    behav.trialNum = 0;
+    behav.flipFlag = 0; %will flip every time when block of trials finishes
+
+    % NOTE1: Check if this works or if should be removed
+    behav.cue = e.rewardCueSide; %which side to start the extra reward on.
+    %{cue =1 indicates left and cue=2 indicates right}
+    %behav.cueType = e.cueType; %if later want to add another way of cueing
+end
+
+% if printDebugMessages,
+%     display(behav);
+%     fprintf('trial  ', behav.trialNum(end)); %which trial number, for debugging
+% end;
+
+switch mod(behav.trialNum(end),e.blockSize)
+    case 0 %indicates start of new miniblock
+        if behav.trialNum(end)>0&&~behav.flipFlag %don't flip before the first block
+            behav.cue = 3-behav.cue; %set the current cue to the "other" one
+            behav.flipFlag = 1; %mark that flip has been done (in case the subject breaks fixation, etc.
+            % and we have to try the first trial again)
+        end
+    case 1 %first trial in new block after flip
+        behav.flipFlag = 0; %signal that flip will be needed next miniblock
+end
+
+% NOTE2: Check if this is needed against NOTE1
+e.cue = behav.cue; % pull the "real" cue for this trial from the behav structure
+
+winColors = [0,255,0;255,0,0];
+frameMsec = params.displayFrameTime*1000; %this number is <~10ms> bc each frame is 10 ms long, so 50frames is 500ms
+choicePeriod = e.choicePeriod; %how long subject has to make a choice, in ms
+frontdoor = (0).*frameMsec; % made the choice too fast .. 20ms = 0.020 sec (set to 2)
+
+%% DETERMINE CORRECT POSITIONS AND COLOR FOR EACH TARGET FOR EACH TRIAL
+posPick = e.posPick;
+targXPick = randi([-1 1],1); % Randomly select left location (-1) or right location (1) for target
+targYPick = randi([-1 1],1); % Select lower location (-1) or upper location (1) for target 
+distXPick = randi([-1 1],1); % Select left location (-1) or right location (1) for distractor
+distYPick = randi([-1 1],1); % Select lower location (-1) or upper location (1) for distractor
+yDistance = e.yDistance; % How far either target will stray from y coordinate = 0
+xDistance = e.xDistance; % How far either target will stray from x coordinate = +-current location
+fixWinRad = params.fixWinRad;
+targWinRad = params.targWinRad;
+fixX = e.fixX;
+xDistSpacer = e.xDistSpacer; % How great of a space between target/distractor radius and probe/fix radius
+
+if posPick < 0 % posPick = -1 means left target will be correct target (one)
+    targX = e.onex;
+    targY = e.oney;
+    distX = e.twox; % Right target will be distractor target (two)
+    distY = e.twoy;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%     <---- |Targ| ---->      |Probe|      <----- |Dist|  ----->     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if targXPick < 0 % targXPick = -1 means correct target's x location will be less than current location
+        targX = targX - randi([0 xDistance],1); % Random # from 0 to xDistance is how far x coordinate moves
+    else % targXPick > 0 -- Correct target's x location will be greater than + current location
+        if (targX + xDistance + targWinRad) >= (fixX - fixWinRad) % If window rad of targX + xDistance overlaps window rad of fixation, update xDistance
+            xDistanceMod = -xDistSpacer - (targWinRad+fixWinRad); % maximum distance where target can be, -1 so window radii don't overlap
+            targX = randi([targX xDistanceMod],1);
+        else
+            targX = targX + randi([0 xDistance],1);
+        end
+    end
+
+    if targYPick < 0 % targYPick = -1 means correct target's y location will be less than 0
+        targY = targY - randi([0 yDistance],1); % Random # from 0 to yDistance is how far y coordinate moves
+    else % Correct target's y location will be greater than 0
+        targY = targY + randi([0 yDistance],1);
+    end
+
+    if distXPick < 0 % distXPick = -1 means distractor target's x location will be less than current location
+        if (distX - xDistance - targWinRad) <= (fixX + fixWinRad) % If distX winRad - xDistance overlaps with winRad of fixation, update xDistance
+            xDistanceMod = xDistSpacer + (targWinRad + fixWinRad); % Add 1 so window radii don't overlap
+            distX = randi([xDistanceMod distX],1); % distX location can be anywhere between xDistanceMod and current location
+        else
+            distX = distX - randi([0 xDistance],1);
+        end
+    else % distXPick > 0 % distXPick = 1 means distractor target's x location will be greater than current location
+        distX = distX + randi([0 xDistance],1);
+    end
+
+    if distYPick < 0 % distYPick = -1 means distractor target's y location will be less than 0
+        distY = distY - randi([0 yDistance],1);
+    else % distYPick = 1 means distractor target's y location will be greater than 0
+        distY = distY + randi([0 yDistance],1);
+    end
+
+else % posPick = 1 means right target will be correct target (two)
+    targX = e.twox;
+    targY = e.twoy;
+    distX = e.onex; % And left target will be distractor target (one)
+    distY = e.oney;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%     <---- |Dist| ---->      |Probe|      <----- |Targ|  ----->     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if targXPick < 0 % targXPick = -1 means correct target's x location will be less than current location
+        if (targX - xDistance - targWinRad) <= (fixX + fixWinRad) % If targX winRad - xDistance overlaps with winRad of fixation, update xDistance
+            xDistanceMod = xDistSpacer + (targWinRad + fixWinRad); % Add 1 so window radii don't overlap
+            targX = randi([xDistanceMod targX],1); % targX location can be anywhere between xDistanceMod and current location
+        else 
+            targX = targX - randi([0 xDistance],1); % Random # from 0 to xDistance is how far x coordinate moves
+        end
+        
+    else % targXPick = 1 means correct target's x location will be greater than current location
+        targX = targX + randi([0 xDistance],1);
+    end
+
+    if targYPick < 0 % targYPick = -1 means correct target's y location will be less than 0
+        targY = targY - randi([0 yDistance],1); % Random # from 0 to yDistance is how far y coordinate moves
+    else % targYPick == 1 means correct target's y location will be greater than 0
+        targY = targY + randi([0 yDistance],1);
+    end
+ 
+    if distXPick < 0 % distXPick = -1 means distractor target's x location will be less than current location
+        distX = distX - randi([0 xDistance],1);
+    else % distXPick = 1 means distractor target's x location will be greater than current location
+        if (distX + xDistance + targWinRad) >= (fixX - fixWinRad) % If window rad of distX + xDistance overlaps window rad of fixation, update xDistance
+            xDistanceMod = -xDistSpacer - (targWinRad+fixWinRad); % Add -1 so window radii don't overlap
+            distX = randi([distX xDistanceMod],1);
+        else
+            distX = distX + randi([0 xDistance],1);
+        end
+        
+    end
+
+    if distYPick < 0 % 
+        distY = distY - randi([0 yDistance],1);
+    else
+        distY = distY + randi([0 yDistance],1);
+    end
+
+end
+
+% Use code below to replace lines above if only needing four possible
+% locations for every trial, rather than any location within xDistance and
+% yDistance limits
+% NOTE: set e.onex and e.oney for the left target
+% if posPick < 0
+%     targX = e.onex;
+%     targY = e.oney;
+%     distX = e.twox;
+%     distY = e.twoy;
+% else
+%     targX = e.twox;
+%     targY = e.twoy;
+%     distX = e.onex;
+%     distY = e.oney;
+% end
+% 
+% if targXPick < 0
+%     targX = targX - xDistance; % Target's x coordinate will be exactly
+%                                % xDistance less than original x coordinate (x = +- current location)
+% else
+%     targX = targX + xDistance; % Target's x coordinate will be exactly
+%                                % xDistance greater than original x coordinate (x = +- current location)
+% end
+% 
+% if targYPick < 0
+%     targY = targY - yDistance; % Target's y coordinate will be exactly
+                                 % yDistance less than original y coordinate (y = 0)
+% else
+%     targY = targY + yDistance; % Target's y coordinate will be exactly
+                                 % yDistance greater than original y coordinate (y = 0)
+% end
+% 
+% if distXPick < 0 
+%     distX = distX - xDistance;
+% else
+%     distX = distX + xDistance;
+% end
+% 
+% if distYPick < 0
+%     distY = distY - yDistance;
+% else
+%     distY = distY + yDistance;
+% end
+
+
+%% DETERMINE WHICH STIMULUS SET WILL BE SELECTED FOR EACH TRIAL
+selectSuper = randi([1 3],1);
+% % superSet randomly selects a row from superset matrix, where each
+% % row contains three values: sample targets and probe values
+if selectSuper == 1
+    superSet = e.A;
+elseif selectSuper == 2
+    superSet = e.B;
+else
+    superSet = e.C;
+end
+% setTrial = randi([1 size(superSet,2)],1); <-- use this if code above only
+% selected superset, not superset AND trial
+sample1RedPerc = superSet(1,1);
+sample2RedPerc = superSet(1,2);
+probeRedPerc = superSet(1,3);
+
+% If probeRedPerc is closer to sample 1, then sample 1 will be correct. If
+% probeRedPerc is closer to sample 2, then sample 2 will be correct.
+if abs(sample1RedPerc-probeRedPerc) < abs(sample2RedPerc-probeRedPerc)
+    sample1X = targX;
+    sample1Y = targY;
+    sample2X = distX;
+    sample2Y = distY;
+    gd = 1;
+elseif abs(sample2RedPerc-probeRedPerc) < abs(sample1RedPerc-probeRedPerc) 
+    sample1X = distX;
+    sample1Y = distY;
+    sample2X = targX;
+    sample2Y = targY;
+    gd = 2;
+else % in this case probe is at meanRedRange
+    randomSamp = randi([0 1],1); % Randomly select 0 or 1
+    if randomSamp == 0 % If 0 is selected, then Sample 1 will be correct target
+        sample1X = targX;
+        sample1Y = targY;
+        sample2X = distX;
+        sample2Y = distY;
+        gd = 1;
+    else % randomSamp == 1 if 1 is selected, then Sample 2 will be correct target
+        sample1X = distX;
+        sample1Y = distY;
+        sample2X = targX;
+        sample2Y = targY;
+        gd = 2;
+    end
+end
+
+% Drop Codes for sample 1, sample 2, and probe values
+sendCode(codes.STIM1_ON);
+sendCode(sample1RedPerc+1000);
+sendCode(codes.STIM1_OFF);
+sendCode(codes.STIM2_ON);
+sendCode(sample2RedPerc+1000);
+sendCode(codes.STIM2_OFF);
+sendCode(codes.STIM3_ON);
+sendCode(probeRedPerc+1000);
+sendCode(codes.STIM3_OFF);
+sendCode(codes.STIM4_ON);
+sendCode(selectSuper+1000);
+sendCode(codes.STIM4_OFF);
+% sendCode(codes.STIM5_ON);
+% sendCode(setTrial+1000);
+% sendCode(codes.STIM5_OFF);
+sendCode(codes.STIM6_ON);
+sendCode(targX+1000);
+sendCode(codes.STIM6_OFF);
+sendCode(codes.STIM7_ON);
+sendCode(targY+1000);
+sendCode(codes.STIM7_OFF);
+sendCode(codes.STIM8_ON);
+sendCode(distX+1000);
+sendCode(codes.STIM8_OFF);
+sendCode(codes.STIM9_ON);
+sendCode(distY+1000);
+sendCode(codes.STIM9_OFF);
+
+
+%% DEFINE OBJECTS
+% Fixation (blue)
+msgAndWait('set 1 oval 0 %i %i %i %i %i %i',[e.fixX e.fixY e.fixRad 0 0 255]);
+
+msgAndWait('set 10 texture_rgb 0 %i %i %i %i %i %i %i %i %i %i',[e.fixX e.fixY ...
+        e.probeWidthPx e.probeHeightPx probeRedPerc 100-probeRedPerc 0 e.rLum e.gLum e.bLum]);
+
+% Choice square sample 1:
+msgAndWait('set 11 texture_rgb 0 %i %i %i %i %i %i %i %i %i %i',[sample1X sample1Y ...
+        e.choiceDotRadius e.choiceDotRadius sample1RedPerc 100-sample1RedPerc 0 e.rLum e.gLum e.bLum]);
+
+% Choice square sample 2:
+msgAndWait('set 12 texture_rgb 0 %i %i %i %i %i %i %i %i %i %i',[sample2X sample2Y ...
+        e.choiceDotRadius e.choiceDotRadius sample2RedPerc 100-sample2RedPerc 0 e.rLum e.gLum e.bLum]);
+
+% Gray frames:
+msgAndWait('set 20 rect_frame 0 %i %i %i %i %i %i %i',[e.fixX e.fixY ...
+        e.choiceDotRadius e.choiceDotRadius e.graySqr e.graySqr e.graySqr]);
+msgAndWait('set 21 rect_frame 0 %i %i %i %i %i %i %i',[sample1X sample1Y ...
+        e.choiceDotRadius e.choiceDotRadius e.graySqr e.graySqr e.graySqr]);
+msgAndWait('set 22 rect_frame 0 %i %i %i %i %i %i %i',[sample2X sample2Y ...
+        e.choiceDotRadius e.choiceDotRadius e.graySqr e.graySqr e.graySqr]);
+
+% White frame for correct target:
+msgAndWait('set 23 rect_frame 0 %i %i %i %i %i %i %i',[sample1X sample1Y ...
+        e.choiceDotRadius*1.5 e.choiceDotRadius*1.5 255 255 255]);
+msgAndWait('set 24 rect_frame 0 %i %i %i %i %i %i %i',[sample2X sample2Y ...
+        e.choiceDotRadius*1.5 e.choiceDotRadius*1.5 255 255 255]);
+
+    
+%% TASK
+msgAndWait('ack'); %to sync to vid refresh
+msgAndWait('obj_on 1'); %turn on fixation
+unixSendPulse(19,10); % Used to be above the 'ack' two lines up, moved to
+        % aligns to FIX_ON for alignment between this pulse and the FIX_ON code
+sendCode(codes.FIX_ON);
+
+if ~waitForFixation(e.timeToFix,e.fixX,e.fixY,params.fixWinRad)
+    % failed to achieve fixation
+    sendCode(codes.IGNORED);
+    msgAndWait('all_off');
+    sendCode(codes.FIX_OFF);
+    waitForMS(e.noFixTimeout);
+    result = codes.IGNORED;
+    return;
+end
+%otherwise, fixation achieved
+sendCode(codes.FIXATE);
+
+if rand<e.fixJuice  %fixJuice
+    giveJuice(1);
+end
+
+% monkey has to wait and fix a time between 400-600 ms before objects start coming
+if ~waitForMS(e.preStimFix,e.fixX,e.fixY,params.fixWinRad)
+    % hold fixation before stimulus comes on
+    sendCode(codes.BROKE_FIX);
+    msgAndWait('all_off');
+    sendCode(codes.FIX_OFF);
+    waitForMS(e.noFixTimeout);
+    result = codes.BROKE_FIX;
+    return;
+end
+
+% objects 11 and 12 (Samples 1 & 2) appear after a random interval
+thisInterval = randi(numel(e.interStimulusInterval));
+if thisInterval>0
+    if ~waitForMS(e.interStimulusInterval(thisInterval),e.fixX,e.fixY, params.fixWinRad)
+        % failed to keep fixation at this point
+        sendCode(codes.BROKE_FIX);
+        msgAndWait('all_off');
+        sendCode(codes.FIX_OFF);
+        waitForMS(e.noFixTimeout);
+        result = codes.BROKE_FIX;
+        return;
+    end
+end
+
+msgAndWait('obj_on 11 12');
+sendCode(codes.(sprintf('TARG%d_ON',gd))); %to indicate that the samples came on
+
+% Wait duration before go cue
+thisInterval = randi(numel(e.sampleOnDuration));
+if thisInterval>0
+    if ~waitForMS(e.sampleOnDuration(thisInterval),e.fixX,e.fixY, params.fixWinRad)
+        % failed to keep fixation at this point
+        sendCode(codes.BROKE_FIX);
+        msgAndWait('all_off');
+        sendCode(codes.FIX_OFF);
+        waitForMS(e.noFixTimeout);
+        result = codes.BROKE_FIX;
+        return;
+    end
+end
+
+% This is for turning targets into gray frames BEFORE probe onset. Set grayDuration to
+% negative number which indicates the time BEFORE probe onset the targets
+% turn into gray frames
+if e.grayDuration<0
+    msg('obj_off 11 12'); %colored targets off
+    msg('obj_on 21 22'); %turns on gray frames
+    sendCode(codes.TARG_OFF);
+    %waitForMS(e.grayDuration*-1);
+    if ~waitForMS(e.grayDuration*-1,e.fixX,e.fixY, params.fixWinRad)
+        % failed to keep fixation during grayDuration wait time
+        sendCode(codes.BROKE_FIX);
+        msgAndWait('all_off');
+        sendCode(codes.FIX_OFF);
+        waitForMS(e.noFixTimeout);
+        result = codes.BROKE_FIX;
+        return;
+    end
+end
+
+msg('obj_off 1'); % fix off
+msg('obj_on 10'); % probe on
+msg('obj_on 20'); % gray frame for probe
+sendCode(codes.FIX_OFF);
+if e.grayDuration>=0 && e.grayDuration<=100
+    waitForMS(e.grayDuration); %delay before colored targets turn to gray frames
+            % IMPORTANT NOTE: This forces the system to wait for gray duration
+            % before tracking eye movements. So never set this to >100 ms
+
+    msg('obj_off 11 12'); %colored targets off
+    msg('obj_on 21 22'); %turns on gray frames
+    sendCode(codes.TARG_OFF);
+elseif e.grayDuration>100
+    error 'please set grayDuration to <=100'
+end
+
+targOnTime = tic; %time to make a choice starts when fix goes off
+
+% Define choice windows. Note that correct target window is always '1'
+choiceWin = waitForFixation(choicePeriod.*frameMsec,[targX distX],[targY distY],params.targWinRad*[1 1],winColors(1:2,:)); 
+sacTime = toc(targOnTime); % how long was target on before subject fixated somewhere
+        % is this period too long? e.choicePeriod param should be in *frames*
+        % if e.choicePeriod = 100, then wait for 1000ms or 1 sec for subject to make choice/saccade
+
+switch choiceWin
+    case 0 % never makes a choice in either window - either breaks fix or stays fixating
+        sendCode(codes.NO_CHOICE);
+        result = codes.NO_CHOICE;
+        msgAndWait('all_off');
+        waitForMS(e.noFixTimeout);
+        return;
+
+    case 1 % CORRECT attempt
+
+        sendCode(codes.SACCADE); % mark the time before the 'stayOnTarget' period
+
+        if ~waitForMS(e.stayOnTarget,targX,targY,params.targWinRad) 
+                %require to stay on for a while, in case the eye 'accidentally' travels through target window
+            % failed to keep fixation
+            sendCode(codes.BROKE_TARG);
+            msgAndWait('all_off');
+            sendCode(codes.TARG_OFF);
+            waitForMS(e.noFixTimeout);
+            result = codes.BROKE_TARG;
+            return;
+        end
+        
+        %frontdoor is *hardcoded* in seconds at beginning
+        if (sacTime >= (frontdoor/1000)) && (sacTime < (choicePeriod.*frameMsec)/1000)  
+                    %less than choice duration window but longer than frontdoor
+            sendCode(codes.CORRECT); 
+            result = codes.CORRECT;
+            behav.trialNum = behav.trialNum+1; %increment trial counter
+        elseif sacTime <= frontdoor/1000 % TOO FAST
+            sendCode(codes.FALSE_START);
+            result = codes.FALSE_START;
+        elseif (sacTime > (choicePeriod.*frameMsec)/1000) % not sure if this is necessary
+            sendCode(codes.LATE_CHOICE);
+            result = codes.LATE_CHOICE;
+        end
+
+    otherwise % INCORRECT choice
+        sendCode(codes.SACCADE);
+        % incorrect choice - immediately score it, so that the subject
+        % can't then switch to the other stimulus.
+        if (sacTime < (choicePeriod.*frameMsec)/1000) %if sacTime is less than the choice period
+            sendCode(codes.MISSED);
+            result = codes.MISSED;
+            behav.trialNum = behav.trialNum+1; %increment trial counter
+        else
+            sendCode(codes.LATE_CHOICE);
+            result = codes.LATE_CHOICE;
+        end
+
+        %turn all targets/probe on to show correct choice
+        if gd == 1
+            msg('obj_on 11'); % Sample 1
+            msg('obj_on 12'); % Sample 2
+            msg('obj_on 23'); % White frame around Sample 1
+        else % if gd == 2
+            msg('obj_on 11');
+            msg('obj_on 12');
+            msg('obj_on 24');
+        end
+        waitForMS(e.showCorrOnErr);
+        msgAndWait('all_off');
+        sendCode(codes.TARG_OFF);
+        
+        % Timeout after incorrect trial - nothing on the screen
+        if result == codes.MISSED
+            waitForMS(e.incorrectTimeout);
+        end
+        return; %end of trial after timeout
+end
+
+% REWARD
+% if result == codes.CORRECT
+%     giveJuice(params.juiceX, params.juiceInterval, params.juiceTTLDuration);
+%     sendCode(codes.REWARD);
+%     Turn all targets and probe on to show correct choice
+%     if gd == 1
+%         msg('obj_on 10');
+%         msg('obj_on 11');
+%         msg('obj_on 12');
+%         msg('obj_on 23');
+%     else %if gd == 2
+%         msg('obj_on 10');
+%         msg('obj_on 11');
+%         msg('obj_on 12');
+%         msg('obj_on 24');
+%     end
+%     waitForMS(e.showCorrOnCorr);
+%     msgAndWait('all_off');
+%     sendCode(codes.TARG_OFF);
+% end
+if result == codes.CORRECT
+    % Turn all targets and probe on to show correct choice
+    minRewardTime = e.minRewardTime-(sacTime*1000);
+    if gd == 1
+        msg('obj_on 10');
+        msg('obj_on 11');
+        msg('obj_on 12');
+        msg('obj_on 23');
+    else %if gd == 2
+        msg('obj_on 10');
+        msg('obj_on 11');
+        msg('obj_on 12');
+        msg('obj_on 24');
+    end
+    waitForMS(e.showCorrOnCorr);
+    msgAndWait('all_off');
+    sendCode(codes.TARG_OFF);
+    if ((sacTime*1000) < e.minRewardTime) % Time it took to make saccade was shorter than minimum time to receive reward
+        waitForMS(minRewardTime); % Have to wait until minimum reward time has passed
+        giveJuice(params.juiceX, params.juiceInterval, params.juiceTTLDuration);
+        sendCode(codes.REWARD);
+    else % Time it took to make saccade was same duration or greater than minimum time to receive reward
+        giveJuice(params.juiceX, params.juiceInterval, params.juiceTTLDuration); %immediately give juice
+        sendCode(codes.REWARD);
+    end
+
+end
+
+
+if isfield(e,'InterTrialPause')
+    waitForMS(e.InterTrialPause); % to lengthen the intertrial interval if needed
+end

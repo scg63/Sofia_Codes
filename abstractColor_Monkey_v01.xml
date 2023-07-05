@@ -1,0 +1,45 @@
+<stimulus name="abstractColor_Monkey_v01" repeats="2000" ex="ex_abstractColor_Monkey_v01" bgColor="2 2 2">
+        <params>
+            <onex>-270</onex>
+            <oney>0</oney>
+            <twox>270</twox>
+            <twoy>0</twoy>
+            <yDistance>0</yDistance>
+            <xDistance>0</xDistance>
+            <xDistSpacer>1</xDistSpacer>
+            <choiceDotRadius>30</choiceDotRadius>
+            <probeWidthPx>30</probeWidthPx>
+            <probeHeightPx>30</probeHeightPx>
+            <rLum>255</rLum>
+            <gLum>255</gLum>
+            <bLum>255</bLum>
+            <graySqr>52</graySqr>
+            <fixJuice>0</fixJuice>    
+            <fixX>0</fixX>
+            <fixY>0</fixY>
+            <fixRad>5</fixRad>
+            <rewardCueSide>1</rewardCueSide>
+            <blockSize>100</blockSize>
+            <cueType>1</cueType>
+            <timeToFix>1000</timeToFix>
+            <stayOnTarget>200</stayOnTarget>
+            <frontDoor>8</frontDoor>
+            <choicePeriod>300</choicePeriod>
+            <incorrectTimeout>4000</incorrectTimeout>
+            <noFixTimeout>1000</noFixTimeout>
+            <showCorrOnCorr>200</showCorrOnCorr>
+            <minRewardTime>500</minRewardTime>
+            <showCorrOnErr>200</showCorrOnErr>
+            <interStimulusInterval>[100:10:200]'</interStimulusInterval>
+            <sampleOnDuration>[600:10:950]'</sampleOnDuration>
+            <InterTrialPause>500</InterTrialPause>  
+            <A>[15 85 71;15 85 29;10 70 58;10 70 22;30 90 78;30 90 42;]'</A>                  
+            <B>[20 80 65;20 80 35;20 80 65;20 80 35;20 70 63;20 70 28;30 80 73;30 80 38;]'</B>
+            <C>[20 80 62;20 80 38;20 80 62;20 80 38;20 70 60;20 70 30;30 80 70;30 80 40;]'</C>
+        </params>
+        <randoms>
+            <grayDuration>-1000:10:-750</grayDuration>
+            <preStimFix>600:10:800</preStimFix> 
+            <posPick>[-1 1]</posPick>
+        </randoms>
+</stimulus>
